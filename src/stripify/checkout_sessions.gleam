@@ -3,6 +3,7 @@ import gleam/int
 import gleam/option
 import gleam/result
 import stripify/client
+import stripify/decoders
 import stripify/json
 import stripify/types
 
@@ -10,9 +11,12 @@ pub type CheckoutSession {
   CheckoutSession(
     id: String,
     mode: String,
-    status: option.Option(String),
+    status: String,
+    customer: option.Option(String),
+    subscription: option.Option(String),
     url: option.Option(String),
     payment_intent: option.Option(String),
+    metadata: types.Metadata,
     object: String,
   )
 }
@@ -25,6 +29,7 @@ pub type CreateCheckoutSession {
     customer: option.Option(String),
     price_id: String,
     quantity: Int,
+    metadata: option.Option(types.Metadata),
   )
 }
 
@@ -66,8 +71,14 @@ fn session_decoder() -> decode.Decoder(CheckoutSession) {
     use id <- decode.field("id", decode.string)
     use object <- decode.field("object", decode.string)
     use mode <- decode.field("mode", decode.string)
-    use status <- decode.optional_field(
-      "status",
+    use status <- decode.field("status", decode.string)
+    use customer <- decode.optional_field(
+      "customer",
+      option.None,
+      decode.optional(decode.string),
+    )
+    use subscription <- decode.optional_field(
+      "subscription",
       option.None,
       decode.optional(decode.string),
     )
@@ -81,12 +92,16 @@ fn session_decoder() -> decode.Decoder(CheckoutSession) {
       option.None,
       decode.optional(decode.string),
     )
+    use metadata <- decoders.optional_metadata()
     decode.success(CheckoutSession(
       id: id,
       mode: mode,
       status: status,
+      customer: customer,
+      subscription: subscription,
       url: url,
       payment_intent: payment_intent,
+      metadata: metadata,
       object: object,
     ))
   }
@@ -100,8 +115,9 @@ fn create_form(input: CreateCheckoutSession) -> List(#(String, String)) {
     #("line_items[0][price]", input.price_id),
     #("line_items[0][quantity]", int.to_string(input.quantity)),
   ]
-  case input.customer {
+  let base = case input.customer {
     option.Some(customer) -> [#("customer", customer), ..base]
     option.None -> base
   }
+  types.push_metadata(base, input.metadata)
 }

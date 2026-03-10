@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/dynamic/decode
 import stripify/types
 
@@ -21,4 +22,15 @@ pub fn stripe_list(
     use data <- decode.field("data", decode.list(of: item_decoder))
     decode.success(types.StripeList(has_more: has_more, data: data))
   }
+}
+
+/// Decode Stripe metadata objects as flat string key/value pairs.
+pub fn metadata() -> decode.Decoder(types.Metadata) {
+  decode.dict(decode.string, decode.string)
+}
+
+pub fn optional_metadata(
+  next: fn(types.Metadata) -> decode.Decoder(a),
+) -> decode.Decoder(a) {
+  decode.optional_field("metadata", dict.new(), metadata(), next)
 }

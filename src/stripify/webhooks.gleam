@@ -1,12 +1,55 @@
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/string
+import stripify/decoders
 import stripify/json
 import stripify/types
 
 pub type Event {
-  Event(id: String, event_type: String, object: String)
+  CheckoutSessionCompleted(
+    id: String,
+    checkout_session: CheckoutSessionEvent,
+  )
+  CustomerSubscriptionCreated(
+    id: String,
+    subscription: SubscriptionEvent,
+  )
+  CustomerSubscriptionUpdated(
+    id: String,
+    subscription: SubscriptionEvent,
+  )
+  CustomerSubscriptionDeleted(
+    id: String,
+    subscription: SubscriptionEvent,
+  )
+  Unknown(
+    id: String,
+    event_type: String,
+    object: String,
+    metadata: types.Metadata,
+  )
+}
+
+pub type CheckoutSessionEvent {
+  CheckoutSessionEvent(
+    id: String,
+    customer: option.Option(String),
+    subscription: option.Option(String),
+    metadata: types.Metadata,
+    object: String,
+  )
+}
+
+pub type SubscriptionEvent {
+  SubscriptionEvent(
+    id: String,
+    status: String,
+    customer: String,
+    metadata: types.Metadata,
+    object: String,
+  )
 }
 
 /// Verify Stripe's `Stripe-Signature` header for a webhook payload.
@@ -54,10 +97,113 @@ pub fn decode_event(payload: String) -> Result(Event, types.Error) {
   let decoder = {
     use id <- decode.field("id", decode.string)
     use event_type <- decode.field("type", decode.string)
-    use object <- decode.subfield(["data", "object", "object"], decode.string)
-    decode.success(Event(id: id, event_type: event_type, object: object))
+    decode.success(#(id, event_type))
   }
-  json.decode(payload, with: decoder)
+  case json.as_dynamic(payload) {
+    Error(error) -> Error(error)
+    Ok(raw) -> {
+      case decode.run(raw, decoder) {
+        Error(_) -> Error(types.Decode("JSON shape did not match expected type"))
+        Ok(#(id, event_type)) ->
+          case event_type {
+            "checkout.session.completed" ->
+              case decode.run(raw, decode.at(["data", "object"], checkout_session_event_decoder())) {
+                Error(_) ->
+                  Error(types.Decode("JSON shape did not match expected type"))
+                Ok(checkout_session) ->
+                  Ok(CheckoutSessionCompleted(id: id, checkout_session: checkout_session))
+              }
+            "customer.subscription.created" ->
+              case decode.run(raw, decode.at(["data", "object"], subscription_event_decoder())) {
+                Error(_) ->
+                  Error(types.Decode("JSON shape did not match expected type"))
+                Ok(subscription) ->
+                  Ok(CustomerSubscriptionCreated(id: id, subscription: subscription))
+              }
+            "customer.subscription.updated" ->
+              case decode.run(raw, decode.at(["data", "object"], subscription_event_decoder())) {
+                Error(_) ->
+                  Error(types.Decode("JSON shape did not match expected type"))
+                Ok(subscription) ->
+                  Ok(CustomerSubscriptionUpdated(id: id, subscription: subscription))
+              }
+            "customer.subscription.deleted" ->
+              case decode.run(raw, decode.at(["data", "object"], subscription_event_decoder())) {
+                Error(_) ->
+                  Error(types.Decode("JSON shape did not match expected type"))
+                Ok(subscription) ->
+                  Ok(CustomerSubscriptionDeleted(id: id, subscription: subscription))
+              }
+            _ ->
+              case decode.run(raw, unknown_event_data_decoder()) {
+                Error(_) ->
+                  Error(types.Decode("JSON shape did not match expected type"))
+                Ok(#(object, metadata)) ->
+                  Ok(Unknown(
+                    id: id,
+                    event_type: event_type,
+                    object: object,
+                    metadata: metadata,
+                  ))
+              }
+          }
+      }
+    }
+  }
+}
+
+fn checkout_session_event_decoder() -> decode.Decoder(CheckoutSessionEvent) {
+  {
+    use id <- decode.field("id", decode.string)
+    use object <- decode.field("object", decode.string)
+    use customer <- decode.optional_field(
+      "customer",
+      option.None,
+      decode.optional(decode.string),
+    )
+    use subscription <- decode.optional_field(
+      "subscription",
+      option.None,
+      decode.optional(decode.string),
+    )
+    use metadata <- decoders.optional_metadata()
+    decode.success(CheckoutSessionEvent(
+      id: id,
+      customer: customer,
+      subscription: subscription,
+      metadata: metadata,
+      object: object,
+    ))
+  }
+}
+
+fn subscription_event_decoder() -> decode.Decoder(SubscriptionEvent) {
+  {
+    use id <- decode.field("id", decode.string)
+    use object <- decode.field("object", decode.string)
+    use status <- decode.field("status", decode.string)
+    use customer <- decode.field("customer", decode.string)
+    use metadata <- decoders.optional_metadata()
+    decode.success(SubscriptionEvent(
+      id: id,
+      status: status,
+      customer: customer,
+      metadata: metadata,
+      object: object,
+    ))
+  }
+}
+
+fn unknown_event_data_decoder() -> decode.Decoder(#(String, types.Metadata)) {
+  decode.at(["data", "object"], unknown_object_decoder())
+}
+
+fn unknown_object_decoder() -> decode.Decoder(#(String, types.Metadata)) {
+  {
+    use object <- decode.field("object", decode.string)
+    use metadata <- decoders.optional_metadata()
+    decode.success(#(object, metadata))
+  }
 }
 
 fn parse_signature_header(

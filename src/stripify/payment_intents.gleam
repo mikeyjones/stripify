@@ -3,6 +3,7 @@ import gleam/int
 import gleam/option
 import gleam/result
 import stripify/client
+import stripify/decoders
 import stripify/json
 import stripify/types
 
@@ -13,6 +14,7 @@ pub type PaymentIntent {
     currency: String,
     status: String,
     customer: option.Option(String),
+    metadata: types.Metadata,
     object: String,
   )
 }
@@ -24,6 +26,7 @@ pub type CreatePaymentIntent {
     customer: option.Option(String),
     confirm_now: Bool,
     payment_method: option.Option(String),
+    metadata: option.Option(types.Metadata),
   )
 }
 
@@ -86,12 +89,14 @@ fn payment_intent_decoder() -> decode.Decoder(PaymentIntent) {
       option.None,
       decode.optional(decode.string),
     )
+    use metadata <- decoders.optional_metadata()
     decode.success(PaymentIntent(
       id: id,
       amount: amount,
       currency: currency,
       status: status,
       customer: customer,
+      metadata: metadata,
       object: object,
     ))
   }
@@ -110,8 +115,9 @@ fn create_form(input: CreatePaymentIntent) -> List(#(String, String)) {
     option.Some(customer) -> [#("customer", customer), ..base]
     option.None -> base
   }
-  case input.payment_method {
+  let base = case input.payment_method {
     option.Some(method) -> [#("payment_method", method), ..base]
     option.None -> base
   }
+  types.push_metadata(base, input.metadata)
 }

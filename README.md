@@ -16,6 +16,7 @@ gleam add stripify@1
 ## Quick start
 
 ```gleam
+import gleam/dict
 import stripify
 import stripify/customers
 import gleam/io
@@ -31,6 +32,7 @@ pub fn main() -> Nil {
         email: option.Some("jane@example.com"),
         name: option.Some("Jane"),
         description: option.Some("Example customer"),
+        metadata: option.Some(dict.from_list([#("crm_id", "crm_123")])),
       ),
     )
 
@@ -56,6 +58,9 @@ pub fn main() -> Nil {
   - `retrieve_product`, `list_products`, `retrieve_price`, `list_prices`
 - `stripify/webhooks`
   - `verify_signature`, `decode_event`
+
+All typed Stripe resources returned by these modules expose a `metadata` field.
+Create and update helpers accept optional metadata where the underlying Stripe endpoint supports it.
 
 ## Configuration
 

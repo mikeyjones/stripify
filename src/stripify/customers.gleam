@@ -12,6 +12,7 @@ pub type Customer {
     id: String,
     email: option.Option(String),
     name: option.Option(String),
+    metadata: types.Metadata,
     object: String,
   )
 }
@@ -21,6 +22,7 @@ pub type CreateCustomer {
     email: option.Option(String),
     name: option.Option(String),
     description: option.Option(String),
+    metadata: option.Option(types.Metadata),
   )
 }
 
@@ -29,6 +31,7 @@ pub type UpdateCustomer {
     email: option.Option(String),
     name: option.Option(String),
     description: option.Option(String),
+    metadata: option.Option(types.Metadata),
   )
 }
 
@@ -94,7 +97,14 @@ fn customer_decoder() -> decode.Decoder(Customer) {
       option.None,
       decode.optional(decode.string),
     )
-    decode.success(Customer(id: id, email: email, name: name, object: object))
+    use metadata <- decoders.optional_metadata()
+    decode.success(Customer(
+      id: id,
+      email: email,
+      name: name,
+      metadata: metadata,
+      object: object,
+    ))
   }
 }
 
@@ -103,6 +113,7 @@ fn create_form(input: CreateCustomer) -> List(#(String, String)) {
   |> push_optional("email", input.email)
   |> push_optional("name", input.name)
   |> push_optional("description", input.description)
+  |> types.push_metadata(input.metadata)
 }
 
 fn update_form(input: UpdateCustomer) -> List(#(String, String)) {
@@ -110,6 +121,7 @@ fn update_form(input: UpdateCustomer) -> List(#(String, String)) {
   |> push_optional("email", input.email)
   |> push_optional("name", input.name)
   |> push_optional("description", input.description)
+  |> types.push_metadata(input.metadata)
 }
 
 fn push_optional(

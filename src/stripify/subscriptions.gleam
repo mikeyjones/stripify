@@ -8,11 +8,23 @@ import stripify/json
 import stripify/types
 
 pub type Subscription {
-  Subscription(id: String, status: String, customer: String, object: String)
+  Subscription(
+    id: String,
+    status: String,
+    customer: String,
+    metadata: types.Metadata,
+    object: String,
+  )
 }
 
 pub type Product {
-  Product(id: String, name: String, active: Bool, object: String)
+  Product(
+    id: String,
+    name: String,
+    active: Bool,
+    metadata: types.Metadata,
+    object: String,
+  )
 }
 
 pub type Price {
@@ -22,12 +34,18 @@ pub type Price {
     unit_amount: option.Option(Int),
     recurring_interval: option.Option(String),
     product: option.Option(String),
+    metadata: types.Metadata,
     object: String,
   )
 }
 
 pub type CreateSubscription {
-  CreateSubscription(customer: String, price_id: String, quantity: Int)
+  CreateSubscription(
+    customer: String,
+    price_id: String,
+    quantity: Int,
+    metadata: option.Option(types.Metadata),
+  )
 }
 
 /// Create a subscription for a customer and price.
@@ -40,7 +58,23 @@ pub fn create_subscription(
     #("items[0][price]", input.price_id),
     #("items[0][quantity]", int.to_string(input.quantity)),
   ]
+  let form = types.push_metadata(form, input.metadata)
   client.post(stripe, "/subscriptions", form)
+  |> result.try(fn(body) { json.decode(body, with: subscription_decoder()) })
+}
+
+/// Update the quantity for a specific subscription item.
+pub fn update_quantity(
+  stripe: types.Client,
+  subscription_id: String,
+  item_id: String,
+  quantity: Int,
+) -> Result(Subscription, types.Error) {
+  let form = [
+    #("items[0][id]", item_id),
+    #("items[0][quantity]", int.to_string(quantity)),
+  ]
+  client.post(stripe, "/subscriptions/" <> subscription_id, form)
   |> result.try(fn(body) { json.decode(body, with: subscription_decoder()) })
 }
 
@@ -150,10 +184,12 @@ fn subscription_decoder() -> decode.Decoder(Subscription) {
     use object <- decode.field("object", decode.string)
     use status <- decode.field("status", decode.string)
     use customer <- decode.field("customer", decode.string)
+    use metadata <- decoders.optional_metadata()
     decode.success(Subscription(
       id: id,
       status: status,
       customer: customer,
+      metadata: metadata,
       object: object,
     ))
   }
@@ -165,7 +201,14 @@ fn product_decoder() -> decode.Decoder(Product) {
     use object <- decode.field("object", decode.string)
     use name <- decode.field("name", decode.string)
     use active <- decode.field("active", decode.bool)
-    decode.success(Product(id: id, name: name, active: active, object: object))
+    use metadata <- decoders.optional_metadata()
+    decode.success(Product(
+      id: id,
+      name: name,
+      active: active,
+      metadata: metadata,
+      object: object,
+    ))
   }
 }
 
@@ -189,12 +232,14 @@ fn price_decoder() -> decode.Decoder(Price) {
       option.None,
       decode.optional(decode.string),
     )
+    use metadata <- decoders.optional_metadata()
     decode.success(Price(
       id: id,
       currency: currency,
       unit_amount: unit_amount,
       recurring_interval: recurring_interval,
       product: product,
+      metadata: metadata,
       object: object,
     ))
   }

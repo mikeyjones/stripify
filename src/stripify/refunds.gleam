@@ -14,6 +14,7 @@ pub type Refund {
     currency: String,
     status: option.Option(String),
     payment_intent: option.Option(String),
+    metadata: types.Metadata,
     object: String,
   )
 }
@@ -23,6 +24,7 @@ pub type CreateRefund {
     payment_intent: String,
     amount: option.Option(Int),
     reason: option.Option(String),
+    metadata: option.Option(types.Metadata),
   )
 }
 
@@ -83,12 +85,14 @@ fn refund_decoder() -> decode.Decoder(Refund) {
       option.None,
       decode.optional(decode.string),
     )
+    use metadata <- decoders.optional_metadata()
     decode.success(Refund(
       id: id,
       amount: amount,
       currency: currency,
       status: status,
       payment_intent: payment_intent,
+      metadata: metadata,
       object: object,
     ))
   }
@@ -100,8 +104,9 @@ fn create_form(input: CreateRefund) -> List(#(String, String)) {
     option.Some(value) -> [#("amount", int.to_string(value)), ..form]
     option.None -> form
   }
-  case input.reason {
+  let form = case input.reason {
     option.Some(value) -> [#("reason", value), ..form]
     option.None -> form
   }
+  types.push_metadata(form, input.metadata)
 }
