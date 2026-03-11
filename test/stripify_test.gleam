@@ -110,11 +110,17 @@ pub fn refunds_list_decode_test() {
 
 pub fn subscriptions_decode_test() {
   let body =
-    "{\"id\":\"sub_123\",\"object\":\"subscription\",\"status\":\"active\",\"customer\":\"cus_123\",\"metadata\":{\"plan\":\"pro\"}}"
+    "{\"id\":\"sub_123\",\"object\":\"subscription\",\"status\":\"active\",\"customer\":\"cus_123\",\"items\":{\"object\":\"list\",\"data\":[{\"id\":\"si_123\",\"object\":\"subscription_item\",\"quantity\":3,\"price\":{\"id\":\"price_123\",\"currency\":\"usd\"}}]},\"metadata\":{\"plan\":\"pro\"}}"
   let stripe = fake_client(status: 200, body: body)
   let assert Ok(subscription) =
     subscriptions.retrieve_subscription(stripe, "sub_123")
   assert subscription.customer == "cus_123"
+  assert list.length(subscription.items) == 1
+  let assert [item] = subscription.items
+  assert item.id == "si_123"
+  assert item.price_id == option.Some("price_123")
+  assert item.quantity == option.Some(3)
+  assert item.currency == option.Some("usd")
   assert subscription.metadata == dict.from_list([#("plan", "pro")])
 }
 
@@ -135,6 +141,29 @@ pub fn prices_decode_test() {
   assert price.unit_amount == option.Some(500)
   assert price.recurring_interval == option.Some("month")
   assert price.metadata == dict.from_list([#("tier", "starter")])
+}
+
+pub fn prices_list_with_lookup_keys_request_test() {
+  let stripe =
+    request_asserting_client(
+      body: "{\"object\":\"list\",\"has_more\":false,\"data\":[]}",
+      assert_request: fn(request) {
+        let types.Request(path:, query:, ..) = request
+        assert path == "/prices"
+        assert_query_contains(query, #("product", "prod_123"))
+        assert_query_contains(query, #("lookup_keys[]", "starter_monthly"))
+        assert_query_contains(query, #("lookup_keys[]", "starter_yearly"))
+        assert_query_contains(query, #("limit", "2"))
+      },
+    )
+
+  let assert Ok(_) =
+    subscriptions.list_prices(
+      stripe,
+      option.Some("prod_123"),
+      option.Some(["starter_monthly", "starter_yearly"]),
+      option.Some(2),
+    )
 }
 
 pub fn webhooks_verify_signature_test() {
@@ -447,6 +476,14 @@ fn assert_form_contains(
 ) -> Nil {
   let types.Request(form:, ..) = request
   let found = list.any(form, fn(pair) { pair == expected })
+  assert found
+}
+
+fn assert_query_contains(
+  query: List(#(String, String)),
+  expected: #(String, String),
+) -> Nil {
+  let found = list.any(query, fn(pair) { pair == expected })
   assert found
 }
 

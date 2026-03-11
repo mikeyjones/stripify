@@ -1,5 +1,6 @@
 import gleam/dynamic/decode
 import gleam/int
+import gleam/list
 import gleam/option
 import gleam/result
 import stripify/client
@@ -12,7 +13,18 @@ pub type Subscription {
     id: String,
     status: String,
     customer: String,
+    items: List(SubscriptionItem),
     metadata: types.Metadata,
+    object: String,
+  )
+}
+
+pub type SubscriptionItem {
+  SubscriptionItem(
+    id: String,
+    price_id: option.Option(String),
+    quantity: option.Option(Int),
+    currency: option.Option(String),
     object: String,
   )
 }
@@ -157,15 +169,23 @@ pub fn retrieve_price(
   |> result.try(fn(body) { json.decode(body, with: price_decoder()) })
 }
 
-/// List prices with optional product and limit filters.
+/// List prices with optional product, lookup keys, and limit filters.
 pub fn list_prices(
   stripe: types.Client,
   product: option.Option(String),
+  lookup_keys: option.Option(List(String)),
   limit: option.Option(Int),
 ) -> Result(types.StripeList(Price), types.Error) {
   let query = []
   let query = case product {
     option.Some(value) -> [#("product", value), ..query]
+    option.None -> query
+  }
+  let query = case lookup_keys {
+    option.Some(values) ->
+      list.fold(over: values, from: query, with: fn(query, value) {
+        [#("lookup_keys[]", value), ..query]
+      })
     option.None -> query
   }
   let query = case limit {
@@ -184,14 +204,57 @@ fn subscription_decoder() -> decode.Decoder(Subscription) {
     use object <- decode.field("object", decode.string)
     use status <- decode.field("status", decode.string)
     use customer <- decode.field("customer", decode.string)
+    use items <- decode.optional_field("items", [], subscription_items_decoder())
     use metadata <- decoders.optional_metadata()
     decode.success(Subscription(
       id: id,
       status: status,
       customer: customer,
+      items: items,
       metadata: metadata,
       object: object,
     ))
+  }
+}
+
+fn subscription_items_decoder() -> decode.Decoder(List(SubscriptionItem)) {
+  {
+    use data <- decode.field("data", decode.list(subscription_item_decoder()))
+    decode.success(data)
+  }
+}
+
+fn subscription_item_decoder() -> decode.Decoder(SubscriptionItem) {
+  {
+    use id <- decode.field("id", decode.string)
+    use object <- decode.field("object", decode.string)
+    use quantity <- decode.optional_field(
+      "quantity",
+      option.None,
+      decode.optional(decode.int),
+    )
+    use price <- decode.optional_field(
+      "price",
+      option.None,
+      decode.optional(subscription_item_price_decoder()),
+    )
+    let price_id = option.map(price, fn(value) { value.0 })
+    let currency = option.map(price, fn(value) { value.1 })
+    decode.success(SubscriptionItem(
+      id: id,
+      price_id: price_id,
+      quantity: quantity,
+      currency: currency,
+      object: object,
+    ))
+  }
+}
+
+fn subscription_item_price_decoder() -> decode.Decoder(#(String, String)) {
+  {
+    use id <- decode.field("id", decode.string)
+    use currency <- decode.field("currency", decode.string)
+    decode.success(#(id, currency))
   }
 }
 
