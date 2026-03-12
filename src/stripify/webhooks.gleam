@@ -8,22 +8,10 @@ import stripify/json
 import stripify/types
 
 pub type Event {
-  CheckoutSessionCompleted(
-    id: String,
-    checkout_session: CheckoutSessionEvent,
-  )
-  CustomerSubscriptionCreated(
-    id: String,
-    subscription: SubscriptionEvent,
-  )
-  CustomerSubscriptionUpdated(
-    id: String,
-    subscription: SubscriptionEvent,
-  )
-  CustomerSubscriptionDeleted(
-    id: String,
-    subscription: SubscriptionEvent,
-  )
+  CheckoutSessionCompleted(id: String, checkout_session: CheckoutSessionEvent)
+  CustomerSubscriptionCreated(id: String, subscription: SubscriptionEvent)
+  CustomerSubscriptionUpdated(id: String, subscription: SubscriptionEvent)
+  CustomerSubscriptionDeleted(id: String, subscription: SubscriptionEvent)
   Unknown(
     id: String,
     event_type: String,
@@ -103,36 +91,72 @@ pub fn decode_event(payload: String) -> Result(Event, types.Error) {
     Error(error) -> Error(error)
     Ok(raw) -> {
       case decode.run(raw, decoder) {
-        Error(_) -> Error(types.Decode("JSON shape did not match expected type"))
+        Error(_) ->
+          Error(types.Decode("JSON shape did not match expected type"))
         Ok(#(id, event_type)) ->
           case event_type {
             "checkout.session.completed" ->
-              case decode.run(raw, decode.at(["data", "object"], checkout_session_event_decoder())) {
+              case
+                decode.run(
+                  raw,
+                  decode.at(
+                    ["data", "object"],
+                    checkout_session_event_decoder(),
+                  ),
+                )
+              {
                 Error(_) ->
                   Error(types.Decode("JSON shape did not match expected type"))
                 Ok(checkout_session) ->
-                  Ok(CheckoutSessionCompleted(id: id, checkout_session: checkout_session))
+                  Ok(CheckoutSessionCompleted(
+                    id: id,
+                    checkout_session: checkout_session,
+                  ))
               }
             "customer.subscription.created" ->
-              case decode.run(raw, decode.at(["data", "object"], subscription_event_decoder())) {
+              case
+                decode.run(
+                  raw,
+                  decode.at(["data", "object"], subscription_event_decoder()),
+                )
+              {
                 Error(_) ->
                   Error(types.Decode("JSON shape did not match expected type"))
                 Ok(subscription) ->
-                  Ok(CustomerSubscriptionCreated(id: id, subscription: subscription))
+                  Ok(CustomerSubscriptionCreated(
+                    id: id,
+                    subscription: subscription,
+                  ))
               }
             "customer.subscription.updated" ->
-              case decode.run(raw, decode.at(["data", "object"], subscription_event_decoder())) {
+              case
+                decode.run(
+                  raw,
+                  decode.at(["data", "object"], subscription_event_decoder()),
+                )
+              {
                 Error(_) ->
                   Error(types.Decode("JSON shape did not match expected type"))
                 Ok(subscription) ->
-                  Ok(CustomerSubscriptionUpdated(id: id, subscription: subscription))
+                  Ok(CustomerSubscriptionUpdated(
+                    id: id,
+                    subscription: subscription,
+                  ))
               }
             "customer.subscription.deleted" ->
-              case decode.run(raw, decode.at(["data", "object"], subscription_event_decoder())) {
+              case
+                decode.run(
+                  raw,
+                  decode.at(["data", "object"], subscription_event_decoder()),
+                )
+              {
                 Error(_) ->
                   Error(types.Decode("JSON shape did not match expected type"))
                 Ok(subscription) ->
-                  Ok(CustomerSubscriptionDeleted(id: id, subscription: subscription))
+                  Ok(CustomerSubscriptionDeleted(
+                    id: id,
+                    subscription: subscription,
+                  ))
               }
             _ ->
               case decode.run(raw, unknown_event_data_decoder()) {

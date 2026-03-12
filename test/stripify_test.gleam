@@ -186,7 +186,7 @@ pub fn webhooks_verify_signature_test() {
         customer: customer,
         subscription: subscription,
         metadata: metadata,
-        ..
+        ..,
       ) = checkout_session
       assert checkout_session_id == "cs_123"
       assert customer == option.Some("cus_123")
@@ -223,7 +223,7 @@ pub fn webhooks_subscription_created_decode_test() {
         status: status,
         customer: customer,
         metadata: metadata,
-        ..
+        ..,
       ) = subscription
       assert subscription_id == "sub_123"
       assert status == "active"

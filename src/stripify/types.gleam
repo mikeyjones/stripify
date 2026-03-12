@@ -70,7 +70,8 @@ pub type StripeObject {
   StripeObject(id: String, object: String)
 }
 
-pub type Metadata = dict.Dict(String, String)
+pub type Metadata =
+  dict.Dict(String, String)
 
 pub type Decoded(data) {
   Decoded(raw: dynamic.Dynamic, data: data)

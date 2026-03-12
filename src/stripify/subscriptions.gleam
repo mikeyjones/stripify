@@ -204,7 +204,11 @@ fn subscription_decoder() -> decode.Decoder(Subscription) {
     use object <- decode.field("object", decode.string)
     use status <- decode.field("status", decode.string)
     use customer <- decode.field("customer", decode.string)
-    use items <- decode.optional_field("items", [], subscription_items_decoder())
+    use items <- decode.optional_field(
+      "items",
+      [],
+      subscription_items_decoder(),
+    )
     use metadata <- decoders.optional_metadata()
     decode.success(Subscription(
       id: id,
